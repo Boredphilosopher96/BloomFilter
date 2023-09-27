@@ -26,4 +26,4 @@ replay_pid*
 # Ignore all intellij related files and MacOS extra files
 .idea
 .DS_Store
-
+*.iml

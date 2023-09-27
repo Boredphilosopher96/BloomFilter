@@ -1,28 +1,63 @@
-import java.util.BitSet;
+import org.apache.commons.codec.binary.StringUtils;
 import org.apache.commons.codec.digest.MurmurHash2;
+
+import java.util.BitSet;
+import java.util.Random;
+
 public class BloomFilter implements BloomFilterInterface {
     private final BitSet bitSet;
+    private int numHashFunctions = 5;
     private int dataSize = 0;
+
+    private int[] hashFunctionSeedsList;
+
     public BloomFilter(int setSize) {
         this.bitSet = new BitSet(setSize);
-    }
-    public void add(String s) {
-        int position = getHashedPosition(s);
-        this.bitSet.set(position);
+        this.initializeHashFunctions();
     }
 
-    public int getHashedPosition(String s) {
-        int hashedValue = getHashValue(s);
+
+    public BloomFilter(int expectedNumItems, int numHashFunctions) {
+        this.numHashFunctions = numHashFunctions;
+        int bitSetSize = (int) Math.ceil(this.numHashFunctions * 1d * expectedNumItems / Math.log(2));
+        this.bitSet = new BitSet(bitSetSize);
+        this.initializeHashFunctions();
+    }
+
+    private void initializeHashFunctions() {
+        this.hashFunctionSeedsList = new int[this.numHashFunctions];
+        Random random = new Random();
+        for (int i = 0; i < this.hashFunctionSeedsList.length; i++) {
+            hashFunctionSeedsList[i] = random.nextInt(1000_000);
+        }
+    }
+
+    public void add(String s) {
+        int position;
+        for (int i = 0; i < this.numHashFunctions; i++) {
+            position = getHashedPosition(s, this.hashFunctionSeedsList[i]);
+            this.bitSet.set(position);
+        }
+        this.dataSize += 1;
+    }
+
+    public int getHashedPosition(String s, int seed) {
+        int hashedValue = getHashValue(s, seed);
         return hashedValue % this.bitSet.size();
     }
 
-    public int getHashValue(String s) {
-        return MurmurHash2.hash32(s);
+    public int getHashValue(String s, int seed) {
+        byte[] bytes = StringUtils.getBytesUtf8(s);
+        return Math.abs(MurmurHash2.hash32(bytes, bytes.length, seed));
     }
 
     public boolean contains(String s) {
-        int position = getHashedPosition(s);
-        return this.bitSet.get(position);
+        int position;
+        for(int i = 0; i < this.numHashFunctions; i++) {
+            position = getHashedPosition(s, this.hashFunctionSeedsList[i]);
+            if(!this.bitSet.get(position)) return false;
+        }
+        return true;
     }
 
     public int filterSize() {
@@ -33,11 +68,11 @@ public class BloomFilter implements BloomFilterInterface {
         return this.dataSize;
     }
 
-    public int numHashes() {
-        return 0;
+    public int numHashFunctions() {
+        return this.numHashFunctions;
     }
 
-    public double falsePositiveProbability() {
+    public double getFalsePositiveRate() {
         return 0;
     }
 
@@ -46,9 +81,4 @@ public class BloomFilter implements BloomFilterInterface {
         this.dataSize = 0;
     }
 
-    public static int getRecommendedSize() {
-//        m = -(n * math.log(p))/(math.log(2)**2)
-//        return int(m)
-        return 0;
-    }
 }
